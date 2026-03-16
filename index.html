@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProjectionFinances — Simulate Your Financial Future</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+</head>
+<body>
+  <!-- Sidebar Navigation -->
+  <nav id="sidebar">
+    <div class="sidebar-brand">
+      <svg class="brand-icon" viewBox="0 0 32 32" fill="none">
+        <rect width="32" height="32" rx="8" fill="url(#grad1)"/>
+        <defs><linearGradient id="grad1" x1="0" y1="0" x2="32" y2="32">
+          <stop offset="0%" stop-color="#6366f1"/>
+          <stop offset="100%" stop-color="#8b5cf6"/>
+        </linearGradient></defs>
+        <path d="M8 22 L12 14 L17 18 L24 8" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </svg>
+      <span class="brand-name">ProjectionFinances</span>
+    </div>
+
+    <ul class="nav-links">
+      <li><a href="#" data-page="dashboard" class="nav-link active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard
+      </a></li>
+      <li><a href="#" data-page="accounts" class="nav-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 100 4 2 2 0 000-4z"/></svg>
+        Accounts
+      </a></li>
+      <li><a href="#" data-page="income-expenses" class="nav-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        Income & Expenses
+      </a></li>
+      <li><a href="#" data-page="projections" class="nav-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Projections
+      </a></li>
+      <li><a href="#" data-page="fire" class="nav-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c-4.97 0-9-2.69-9-6 0-4 4.5-7.5 4.5-11.5 0 0 2 2.5 3 4 1-2 1.5-4.5 1.5-4.5s3.5 3 4.5 7c.5-1.5 1-3 1-3s2.5 3.5 2.5 8c0 3.31-4.03 6-9 6z"/></svg>
+        FIRE Calculator
+      </a></li>
+      <li><a href="#" data-page="montecarlo" class="nav-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M 2 20 Q 6 4, 12 12 T 22 4"/><path d="M 2 18 Q 8 8, 12 14 T 22 6" opacity="0.5"/><path d="M 2 22 Q 5 10, 12 16 T 22 8" opacity="0.3"/></svg>
+        Monte Carlo
+      </a></li>
+      <li><a href="#" data-page="import-sync" class="nav-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14.899A7 7 0 1115.71 8h1.79a4.5 4.5 0 012.5 8.242"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/></svg>
+        Import &amp; Sync
+      </a></li>
+      <li><a href="#" data-page="milestones" class="nav-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+        Milestones
+      </a></li>
+      <li><a href="#" data-page="settings" class="nav-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        Settings
+      </a></li>
+    </ul>
+
+    <div class="sidebar-footer">
+      <button id="btn-seed-data" class="btn-sidebar btn-seed" title="Load Demo Data">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Load Demo Data
+      </button>
+      <button id="btn-export" class="btn-sidebar" title="Export Data">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export
+      </button>
+      <button id="btn-import" class="btn-sidebar" title="Import Data">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Import
+      </button>
+      <input type="file" id="import-file" accept=".json" style="display:none">
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main id="main-content">
+
+    <!-- ==================== DASHBOARD ==================== -->
+    <section id="page-dashboard" class="page active">
+      <div class="page-header">
+        <h1>Dashboard</h1>
+        <p class="subtitle">Your financial overview at a glance</p>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-card accent-green">
+          <div class="metric-label">Net Worth</div>
+          <div class="metric-value" id="dash-net-worth">$0</div>
+          <div class="metric-sub" id="dash-nw-change"></div>
+        </div>
+        <div class="metric-card accent-blue">
+          <div class="metric-label">Total Assets</div>
+          <div class="metric-value" id="dash-assets">$0</div>
+        </div>
+        <div class="metric-card accent-red">
+          <div class="metric-label">Total Liabilities</div>
+          <div class="metric-value" id="dash-liabilities">$0</div>
+        </div>
+        <div class="metric-card accent-purple">
+          <div class="metric-label">Savings Rate</div>
+          <div class="metric-value" id="dash-savings-rate">0%</div>
+        </div>
+        <div class="metric-card accent-orange">
+          <div class="metric-label">FIRE Number</div>
+          <div class="metric-value" id="dash-fire-number">$0</div>
+        </div>
+        <div class="metric-card accent-teal">
+          <div class="metric-label">Years to FIRE</div>
+          <div class="metric-value" id="dash-years-fire">—</div>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="chart-container wide">
+          <h3>Net Worth Projection</h3>
+          <canvas id="chart-dash-projection"></canvas>
+        </div>
+        <div class="chart-container">
+          <h3>Asset Allocation</h3>
+          <canvas id="chart-dash-allocation"></canvas>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="chart-container wide">
+          <h3>FIRE Progress</h3>
+          <div class="fire-progress-bar-container">
+            <div class="fire-progress-bar" id="dash-fire-bar" style="width: 0%"></div>
+            <span class="fire-progress-label" id="dash-fire-pct">0%</span>
+          </div>
+          <p class="fire-progress-text" id="dash-fire-text">Add your accounts and income to see your FIRE progress.</p>
+        </div>
+      </div>
+
+      <div class="snapshot-bar">
+        <div class="snapshot-info">
+          <h3>📸 Record Net Worth Snapshot</h3>
+          <p>Save today's net worth to track your progress over time.</p>
+        </div>
+        <div class="snapshot-actions">
+          <span class="snapshot-last" id="dash-last-snapshot"></span>
+          <button class="btn btn-primary" id="btn-record-snapshot">Record Snapshot</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ACCOUNTS ==================== -->
+    <section id="page-accounts" class="page">
+      <div class="page-header">
+        <h1>Accounts</h1>
+        <p class="subtitle">Manage your assets and liabilities</p>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="assets">Assets</button>
+        <button class="tab" data-tab="liabilities">Liabilities</button>
+      </div>
+
+      <div class="tab-content active" id="tab-assets">
+        <div class="section-header">
+          <h2>Assets</h2>
+          <button class="btn btn-primary" id="btn-add-asset">+ Add Asset</button>
+        </div>
+        <div class="accounts-list" id="assets-list"></div>
+      </div>
+
+      <div class="tab-content" id="tab-liabilities">
+        <div class="section-header">
+          <h2>Liabilities</h2>
+          <button class="btn btn-primary" id="btn-add-liability">+ Add Liability</button>
+        </div>
+        <div class="accounts-list" id="liabilities-list"></div>
+      </div>
+    </section>
+
+    <!-- ==================== INCOME & EXPENSES ==================== -->
+    <section id="page-income-expenses" class="page">
+      <div class="page-header">
+        <h1>Income & Expenses</h1>
+        <p class="subtitle">Define your cash flow</p>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="income">Income</button>
+        <button class="tab" data-tab="expenses">Expenses</button>
+      </div>
+
+      <div class="tab-content active" id="tab-income">
+        <div class="section-header">
+          <h2>Income Streams</h2>
+          <button class="btn btn-primary" id="btn-add-income">+ Add Income</button>
+        </div>
+        <div class="accounts-list" id="income-list"></div>
+      </div>
+
+      <div class="tab-content" id="tab-expenses">
+        <div class="section-header">
+          <h2>Expenses</h2>
+          <button class="btn btn-primary" id="btn-add-expense">+ Add Expense</button>
+        </div>
+        <div class="accounts-list" id="expenses-list"></div>
+      </div>
+
+      <div class="charts-row" style="margin-top:2rem">
+        <div class="chart-container wide">
+          <h3>Annual Cash Flow</h3>
+          <canvas id="chart-cashflow"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== PROJECTIONS ==================== -->
+    <section id="page-projections" class="page">
+      <div class="page-header">
+        <h1>Net Worth Projections</h1>
+        <p class="subtitle">Visualize your financial future over time</p>
+      </div>
+
+      <div class="projection-controls">
+        <div class="control-group">
+          <label>Projection Years</label>
+          <input type="range" id="proj-years" min="5" max="60" value="30">
+          <span id="proj-years-val">30 years</span>
+        </div>
+        <div class="control-group">
+          <label>Expected Return</label>
+          <input type="range" id="proj-return" min="1" max="15" value="7" step="0.5">
+          <span id="proj-return-val">7%</span>
+        </div>
+        <div class="control-group">
+          <label>Inflation Rate</label>
+          <input type="range" id="proj-inflation" min="0" max="8" value="3" step="0.5">
+          <span id="proj-inflation-val">3%</span>
+        </div>
+        <div class="control-group toggle-group">
+          <label>Inflation Adjusted</label>
+          <label class="toggle">
+            <input type="checkbox" id="proj-real" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="chart-container full-width">
+        <canvas id="chart-projection"></canvas>
+      </div>
+
+      <div class="projection-table-container">
+        <h3>Year-by-Year Breakdown</h3>
+        <div class="table-scroll">
+          <table id="projection-table">
+            <thead>
+              <tr>
+                <th>Year</th>
+                <th>Age</th>
+                <th>Gross Income</th>
+                <th>Income Tax</th>
+                <th>Net Income</th>
+                <th>Expenses</th>
+                <th>Net Savings</th>
+                <th>Returns</th>
+                <th>Div. Tax</th>
+                <th>Accessible</th>
+                <th>Net Worth</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== FIRE CALCULATOR ==================== -->
+    <section id="page-fire" class="page">
+      <div class="page-header">
+        <h1>FIRE Calculator</h1>
+        <p class="subtitle">Calculate your path to Financial Independence, Retire Early</p>
+      </div>
+
+      <div class="fire-grid">
+        <div class="fire-inputs card">
+          <h3>FIRE Parameters</h3>
+          <div class="form-group">
+            <label>Annual Expenses in Retirement</label>
+            <input type="number" id="fire-expenses" value="40000" min="0" step="1000">
+            <small>How much you plan to spend per year after retiring</small>
+          </div>
+          <div class="form-group">
+            <label>Safe Withdrawal Rate (%)</label>
+            <input type="number" id="fire-swr" value="4" min="1" max="10" step="0.1">
+            <small>The percentage you'll withdraw annually (4% rule is standard)</small>
+          </div>
+          <div class="form-group">
+            <label>Expected Real Return (%)</label>
+            <input type="number" id="fire-return" value="7" min="0" max="20" step="0.5">
+            <small>Expected investment return before inflation</small>
+          </div>
+          <div class="form-group">
+            <label>Expected Inflation (%)</label>
+            <input type="number" id="fire-inflation" value="3" min="0" max="10" step="0.5">
+            <small>Expected annual inflation rate</small>
+          </div>
+          <div class="form-group">
+            <label>Withdrawal Strategy</label>
+            <select id="fire-strategy">
+              <option value="standard">Standard (4% Rule)</option>
+              <option value="variable">Variable Percentage</option>
+              <option value="guardrails">Guardrails (Guyton-Klinger)</option>
+              <option value="bond-tent">Bond Tent</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" id="btn-calc-fire" style="width:100%;margin-top:1rem">Calculate FIRE</button>
+        </div>
+
+        <div class="fire-results">
+          <div class="metrics-grid small">
+            <div class="metric-card accent-orange">
+              <div class="metric-label">FIRE Number</div>
+              <div class="metric-value" id="fire-number">$0</div>
+            </div>
+            <div class="metric-card accent-green">
+              <div class="metric-label">Years to FIRE (Total NW)</div>
+              <div class="metric-value" id="fire-years">—</div>
+              <div class="metric-sub" id="fire-years-sub"></div>
+            </div>
+            <div class="metric-card accent-blue">
+              <div class="metric-label">FIRE Date</div>
+              <div class="metric-value" id="fire-date">—</div>
+            </div>
+            <div class="metric-card accent-purple">
+              <div class="metric-label">FIRE Age</div>
+              <div class="metric-value" id="fire-age">—</div>
+            </div>
+            <div class="metric-card accent-red">
+              <div class="metric-label">Accessible FIRE</div>
+              <div class="metric-value" id="fire-accessible-years">—</div>
+              <div class="metric-sub" id="fire-accessible-sub">Penalty-free funds only</div>
+            </div>
+            <div class="metric-card accent-teal">
+              <div class="metric-label">Accessible FIRE Age</div>
+              <div class="metric-value" id="fire-accessible-age">—</div>
+              <div class="metric-sub" id="fire-accessible-date"></div>
+            </div>
+          </div>
+
+          <div class="chart-container full-width">
+            <h3>Path to Financial Independence</h3>
+            <canvas id="chart-fire"></canvas>
+          </div>
+
+          <div class="access-warning" id="fire-access-warning" style="display:none"></div>
+
+          <div class="fire-types card">
+            <h3>Types of FIRE <small style="font-weight:normal;color:var(--text-muted)">— click to calculate</small></h3>
+            <div class="fire-types-grid">
+              <div class="fire-type" data-fire-type="lean" data-fire-expenses="30000">
+                <div class="fire-type-icon">🔥</div>
+                <h4>Lean FIRE</h4>
+                <p class="fire-type-expenses">$30k/yr expenses</p>
+                <div class="fire-type-number" id="lean-fire-num">—</div>
+              </div>
+              <div class="fire-type" data-fire-type="regular" data-fire-expenses="50000">
+                <div class="fire-type-icon">🔥🔥</div>
+                <h4>Regular FIRE</h4>
+                <p class="fire-type-expenses">$40k-60k/yr expenses</p>
+                <div class="fire-type-number" id="regular-fire-num">—</div>
+              </div>
+              <div class="fire-type" data-fire-type="fat" data-fire-expenses="100000">
+                <div class="fire-type-icon">🔥🔥🔥</div>
+                <h4>Fat FIRE</h4>
+                <p class="fire-type-expenses">$100k+/yr expenses</p>
+                <div class="fire-type-number" id="fat-fire-num">—</div>
+              </div>
+              <div class="fire-type" data-fire-type="barista" data-fire-expenses="25000">
+                <div class="fire-type-icon">☕</div>
+                <h4>Barista FIRE</h4>
+                <p class="fire-type-expenses">Part-time work covers gap</p>
+                <div class="fire-type-number" id="barista-fire-num">—</div>
+              </div>
+              <div class="fire-type" data-fire-type="coast" data-fire-expenses="0">
+                <div class="fire-type-icon">🏖️</div>
+                <h4>Coast FIRE</h4>
+                <p class="fire-type-expenses">No more savings needed</p>
+                <div class="fire-type-number" id="coast-fire-num">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== MONTE CARLO ==================== -->
+    <section id="page-montecarlo" class="page">
+      <div class="page-header">
+        <h1>Monte Carlo Simulation</h1>
+        <p class="subtitle">Battle-test your plan against varying market conditions</p>
+      </div>
+
+      <div class="mc-controls">
+        <div class="control-group">
+          <label>Number of Simulations</label>
+          <select id="mc-trials">
+            <option value="100">100</option>
+            <option value="500" selected>500</option>
+            <option value="1000">1,000</option>
+            <option value="2500">2,500</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Mean Annual Return (%)</label>
+          <input type="number" id="mc-mean" value="10" min="0" max="20" step="0.5">
+        </div>
+        <div class="control-group">
+          <label>Std Deviation (%)</label>
+          <input type="number" id="mc-std" value="15" min="1" max="40" step="0.5">
+        </div>
+        <div class="control-group">
+          <label>Simulation Years</label>
+          <input type="number" id="mc-years" value="30" min="5" max="60" step="1">
+        </div>
+        <div class="control-group">
+          <label>Withdrawal per Year ($)</label>
+          <input type="number" id="mc-withdrawal" value="0" min="0" step="1000">
+          <small>0 = accumulation only</small>
+        </div>
+        <button class="btn btn-primary" id="btn-run-mc">Run Simulation</button>
+      </div>
+
+      <div class="mc-results" id="mc-results" style="display:none">
+        <div class="metrics-grid small">
+          <div class="metric-card accent-green">
+            <div class="metric-label">Success Rate</div>
+            <div class="metric-value" id="mc-success">—</div>
+          </div>
+          <div class="metric-card accent-blue">
+            <div class="metric-label">Median Outcome</div>
+            <div class="metric-value" id="mc-median">—</div>
+          </div>
+          <div class="metric-card accent-purple">
+            <div class="metric-label">10th Percentile</div>
+            <div class="metric-value" id="mc-p10">—</div>
+          </div>
+          <div class="metric-card accent-orange">
+            <div class="metric-label">90th Percentile</div>
+            <div class="metric-value" id="mc-p90">—</div>
+          </div>
+        </div>
+
+        <div class="success-gauge-container">
+          <div class="success-gauge">
+            <svg viewBox="0 0 200 120" class="gauge-svg">
+              <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#1e293b" stroke-width="16" stroke-linecap="round"/>
+              <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#gaugeGrad)" stroke-width="16" stroke-linecap="round" id="gauge-fill" stroke-dasharray="0 251.2"/>
+              <defs>
+                <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#ef4444"/>
+                  <stop offset="50%" stop-color="#f59e0b"/>
+                  <stop offset="100%" stop-color="#22c55e"/>
+                </linearGradient>
+              </defs>
+            </svg>
+            <div class="gauge-label" id="gauge-pct">—</div>
+            <div class="gauge-sublabel">Chance of Success</div>
+          </div>
+        </div>
+
+        <div class="chart-container full-width">
+          <h3>Simulation Spread</h3>
+          <canvas id="chart-montecarlo"></canvas>
+        </div>
+
+        <div class="chart-container full-width">
+          <h3>Final Net Worth Distribution</h3>
+          <canvas id="chart-mc-histogram"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== IMPORT & SYNC ==================== -->
+    <section id="page-import-sync" class="page">
+      <div class="page-header">
+        <h1>Import &amp; Sync</h1>
+        <p class="subtitle">Import your financial data from CSV exports — no Plaid needed</p>
+      </div>
+
+      <div class="import-hero">
+        <div class="import-hero-icon">📂</div>
+        <h2>Import from any bank or brokerage</h2>
+        <p>Every financial institution lets you download CSV files. Just export from your provider and drop it here.</p>
+      </div>
+
+      <div class="import-grid">
+        <!-- Import Type Selection -->
+        <div class="card">
+          <h3>1. What are you importing?</h3>
+          <div class="import-type-options">
+            <label class="import-type-option active">
+              <input type="radio" name="import-type" value="accounts" checked>
+              <div class="import-type-card">
+                <span class="import-type-icon">🏦</span>
+                <strong>Account Balances</strong>
+                <small>Holdings, positions, or account summary</small>
+              </div>
+            </label>
+            <label class="import-type-option">
+              <input type="radio" name="import-type" value="transactions">
+              <div class="import-type-card">
+                <span class="import-type-icon">💳</span>
+                <strong>Transactions</strong>
+                <small>Spending & income history to auto-categorize</small>
+              </div>
+            </label>
+            <label class="import-type-option">
+              <input type="radio" name="import-type" value="net-worth">
+              <div class="import-type-card">
+                <span class="import-type-icon">📈</span>
+                <strong>Net Worth History</strong>
+                <small>Historical net worth snapshots over time</small>
+              </div>
+            </label>
+            <label class="import-type-option">
+              <input type="radio" name="import-type" value="balance-history">
+              <div class="import-type-card">
+                <span class="import-type-icon">📊</span>
+                <strong>Account Balance History</strong>
+                <small>Track one account's balance over time</small>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Source Preset -->
+        <div class="card">
+          <h3>2. Where is it from?</h3>
+          <div class="form-group">
+            <label>Source / Format</label>
+            <select id="import-preset">
+              <option value="auto">Auto-Detect</option>
+              <option value="generic">Generic CSV</option>
+              <option value="mint">Mint (Intuit)</option>
+              <option value="empower">Empower / Personal Capital</option>
+              <option value="fidelity">Fidelity</option>
+              <option value="vanguard">Vanguard</option>
+              <option value="schwab">Charles Schwab</option>
+              <option value="bank-statement">Bank Statement</option>
+            </select>
+          </div>
+          <div class="import-format-tips" id="import-tips">
+            <h4>� Quick Export Links — click to go directly to each provider's download page</h4>
+            <div class="provider-links">
+              <a href="https://digital.fidelity.com/ftgw/digital/portfolio/positions" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🟢</span>
+                <div>
+                  <strong>Fidelity</strong>
+                  <small>Positions → Download</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://personal.vanguard.com/us/OfxWelcome" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🔴</span>
+                <div>
+                  <strong>Vanguard</strong>
+                  <small>Download Center → CSV</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://client.schwab.com/app/accounts/transactionhistory" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🔵</span>
+                <div>
+                  <strong>Schwab</strong>
+                  <small>History → Export</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://home.personalcapital.com/page/login/goHome" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🟡</span>
+                <div>
+                  <strong>Empower</strong>
+                  <small>Transactions → CSV</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://www.tdameritrade.com/client/signon" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🟢</span>
+                <div>
+                  <strong>TD Ameritrade</strong>
+                  <small>Transactions → Download</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://www.merrilledge.com/go/login" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🔵</span>
+                <div>
+                  <strong>Merrill Edge</strong>
+                  <small>Accounts → Statements</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://investing.interactivebrokers.com/portal/#/portfolio" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🔴</span>
+                <div>
+                  <strong>Interactive Brokers</strong>
+                  <small>Reports → Flex Queries</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://us.etrade.com/etx/sp/stockplan/#/myAccount/stockPlanSummary" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🟣</span>
+                <div>
+                  <strong>E*Trade</strong>
+                  <small>Accounts → Download</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://login.ally.com/" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🟣</span>
+                <div>
+                  <strong>Ally Invest</strong>
+                  <small>Activity → Export</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://www.wealthfront.com/login" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🟡</span>
+                <div>
+                  <strong>Wealthfront</strong>
+                  <small>Account → Download CSV</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://app.betterment.com/transactions" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🟢</span>
+                <div>
+                  <strong>Betterment</strong>
+                  <small>Activity → Download</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://robinhood.com/account/documents" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🟢</span>
+                <div>
+                  <strong>Robinhood</strong>
+                  <small>Account → Statements</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://www.coinbase.com/reports" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🔵</span>
+                <div>
+                  <strong>Coinbase</strong>
+                  <small>Reports → Generate CSV</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://online.citi.com/US/ag/accountactivity" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🔵</span>
+                <div>
+                  <strong>Citi</strong>
+                  <small>Activity → Download</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://secure.bankofamerica.com/myaccounts/signin/v2/signOn.go" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🔴</span>
+                <div>
+                  <strong>Bank of America</strong>
+                  <small>Statements → Download</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://secure07a.chase.com/web/auth/dashboard" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🔵</span>
+                <div>
+                  <strong>Chase</strong>
+                  <small>Activity → Download</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://www.wellsfargo.com/downloading/" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🔴</span>
+                <div>
+                  <strong>Wells Fargo</strong>
+                  <small>Statements → Download</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://www.marcus.com/us/en/login" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🔵</span>
+                <div>
+                  <strong>Marcus (Goldman Sachs)</strong>
+                  <small>Activity → Export</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://www.capitalone.com/sign-in/" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🔴</span>
+                <div>
+                  <strong>Capital One</strong>
+                  <small>Activity → Download</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://www.sofi.com/login/" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🟡</span>
+                <div>
+                  <strong>SoFi</strong>
+                  <small>Account → Statements</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://www.discover.com/online-banking/login/" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🟠</span>
+                <div>
+                  <strong>Discover</strong>
+                  <small>Statements → Download</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+              <a href="https://www.usaa.com/my/logon" target="_blank" rel="noopener" class="provider-link">
+                <span class="provider-logo">🔵</span>
+                <div>
+                  <strong>USAA</strong>
+                  <small>Activity → Download</small>
+                </div>
+                <span class="link-arrow">↗</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Drop Zone -->
+      <div class="csv-drop-zone" id="csv-drop-zone">
+        <div class="drop-icon">📄</div>
+        <h3>Drop your CSV file here</h3>
+        <p>or <label for="csv-file-input" class="file-link">browse to select a file</label></p>
+        <input type="file" id="csv-file-input" accept=".csv,.tsv,.txt" style="display:none">
+        <small>Supports CSV, TSV, and tab-delimited files</small>
+      </div>
+
+      <!-- Paste Zone -->
+      <div class="csv-paste-section">
+        <h3>Or paste CSV / spreadsheet data</h3>
+        <p>Copy columns from Excel, Google Sheets, or any spreadsheet and paste below.</p>
+        <textarea id="csv-paste-area" rows="6" placeholder="Paste tab-separated or comma-separated data here...\nDate, Amount, Description\n01/15/2025, 5000, Paycheck"></textarea>
+        <button class="btn btn-secondary" id="btn-parse-pasted" style="margin-top:8px">Parse Pasted Data</button>
+      </div>
+
+      <!-- Preview & Column Mapping -->
+      <div class="csv-preview-section" id="csv-preview-section" style="display:none">
+        <div class="card">
+          <div class="csv-preview-header">
+            <h3>3. Preview &amp; Map Columns</h3>
+            <span class="csv-detected-format" id="csv-detected-format"></span>
+          </div>
+          <p id="csv-row-count" style="color:var(--text-muted);margin-bottom:16px"></p>
+
+          <!-- Column Mapping -->
+          <div class="column-mapping" id="column-mapping"></div>
+
+          <!-- Data Preview Table -->
+          <div class="table-scroll" style="margin-top:16px">
+            <table id="csv-preview-table">
+              <thead><tr id="csv-preview-head"></tr></thead>
+              <tbody id="csv-preview-body"></tbody>
+            </table>
+          </div>
+
+          <div style="margin-top:20px;display:flex;gap:12px;justify-content:flex-end">
+            <button class="btn btn-secondary" id="btn-cancel-import">Cancel</button>
+            <button class="btn btn-primary" id="btn-confirm-import">Import Data</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Import History -->
+      <div class="card" style="margin-top:24px">
+        <h3>Import History</h3>
+        <div id="import-history-list" class="import-history-list"></div>
+      </div>
+
+      <!-- Quick Snapshot Section -->
+      <div class="card" style="margin-top:24px">
+        <h3>📸 Quick Net Worth Snapshots</h3>
+        <p style="color:var(--text-muted);margin-bottom:16px">Manually record your net worth over time. Great for tracking progress between CSV imports.</p>
+        <div class="snapshot-form">
+          <div class="form-group" style="flex:1">
+            <label>Date</label>
+            <input type="date" id="snapshot-date" value="">
+          </div>
+          <div class="form-group" style="flex:1">
+            <label>Net Worth ($)</label>
+            <input type="number" id="snapshot-nw" placeholder="e.g. 250000" step="1000">
+          </div>
+          <div class="form-group" style="flex:1">
+            <label>Assets ($) <small style="font-weight:normal">(optional)</small></label>
+            <input type="number" id="snapshot-assets" placeholder="Total assets" step="1000">
+          </div>
+          <div class="form-group" style="flex:1">
+            <label>Liabilities ($) <small style="font-weight:normal">(optional)</small></label>
+            <input type="number" id="snapshot-liab" placeholder="Total liabilities" step="1000">
+          </div>
+          <button class="btn btn-primary" id="btn-add-snapshot" style="align-self:flex-end">Add Snapshot</button>
+        </div>
+        <div class="chart-container full-width" style="margin-top:16px">
+          <h3>Net Worth History</h3>
+          <canvas id="chart-nw-history"></canvas>
+        </div>
+        <div class="table-scroll" style="margin-top:12px">
+          <table id="snapshot-history-table">
+            <thead><tr><th>Date</th><th>Net Worth</th><th>Assets</th><th>Liabilities</th><th></th></tr></thead>
+            <tbody id="snapshot-history-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== MILESTONES ==================== -->
+    <section id="page-milestones" class="page">
+      <div class="page-header">
+        <h1>Milestones</h1>
+        <p class="subtitle">Define the financial goals that matter to you</p>
+      </div>
+
+      <div class="section-header">
+        <h2>Your Milestones</h2>
+        <button class="btn btn-primary" id="btn-add-milestone">+ Add Milestone</button>
+      </div>
+
+      <div class="milestones-list" id="milestones-list"></div>
+
+      <div class="chart-container full-width" style="margin-top:2rem">
+        <h3>Milestone Timeline</h3>
+        <canvas id="chart-milestones"></canvas>
+      </div>
+    </section>
+
+    <!-- ==================== SETTINGS ==================== -->
+    <section id="page-settings" class="page">
+      <div class="page-header">
+        <h1>Settings</h1>
+        <p class="subtitle">Configure your profile and preferences</p>
+      </div>
+
+      <div class="settings-grid">
+        <div class="card">
+          <h3>Personal Information</h3>
+          <div class="form-group">
+            <label>Your Name</label>
+            <input type="text" id="setting-name" placeholder="Enter your name">
+          </div>
+          <div class="form-group">
+            <label>Current Age</label>
+            <input type="number" id="setting-age" value="30" min="18" max="100">
+          </div>
+          <div class="form-group">
+            <label>Planned Retirement Age</label>
+            <input type="number" id="setting-retire-age" value="65" min="25" max="100">
+          </div>
+          <div class="form-group">
+            <label>Life Expectancy</label>
+            <input type="number" id="setting-life-exp" value="90" min="50" max="120">
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Default Assumptions</h3>
+          <div class="form-group">
+            <label>Default Investment Return (%)</label>
+            <input type="number" id="setting-return" value="7" min="0" max="20" step="0.5">
+          </div>
+          <div class="form-group">
+            <label>Default Inflation Rate (%)</label>
+            <input type="number" id="setting-inflation" value="3" min="0" max="10" step="0.5">
+          </div>
+          <div class="form-group">
+            <label>Federal Income Tax Rate (%)</label>
+            <input type="number" id="setting-tax" value="25" min="0" max="50" step="1">
+            <small>Effective federal income tax rate on earnings</small>
+          </div>
+          <div class="form-group">
+            <label>Capital Gains Tax Rate (%)</label>
+            <input type="number" id="setting-capgains" value="15" min="0" max="30" step="1">
+            <small>Long-term capital gains rate (15% typical)</small>
+          </div>
+          <div class="form-group">
+            <label>State/Local Tax Rate (%)</label>
+            <input type="number" id="setting-statetax" value="5" min="0" max="15" step="0.5">
+            <small>State income tax (0% in TX, FL, WA, etc.)</small>
+          </div>
+          <div class="form-group">
+            <label>Currency</label>
+            <select id="setting-currency">
+              <option value="USD">$ USD</option>
+              <option value="EUR">€ EUR</option>
+              <option value="GBP">£ GBP</option>
+              <option value="CAD">$ CAD</option>
+              <option value="AUD">$ AUD</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Display Preferences</h3>
+          <div class="form-group toggle-group">
+            <label>Dark Mode</label>
+            <label class="toggle">
+              <input type="checkbox" id="setting-dark" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="form-group toggle-group">
+            <label>Show Inflation-Adjusted Values</label>
+            <label class="toggle">
+              <input type="checkbox" id="setting-real-values" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="form-group toggle-group">
+            <label>Compact Number Format</label>
+            <label class="toggle">
+              <input type="checkbox" id="setting-compact">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Data Management</h3>
+          <p style="color:var(--text-muted);margin-bottom:1rem">Your data is stored locally in your browser. No data is sent to any server.</p>
+          <button class="btn btn-primary" id="btn-settings-export" style="width:100%;margin-bottom:0.5rem">Export All Data</button>
+          <button class="btn btn-secondary" id="btn-settings-import" style="width:100%;margin-bottom:0.5rem">Import Data</button>
+          <button class="btn btn-danger" id="btn-reset-data" style="width:100%">Reset All Data</button>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="btn-save-settings" style="margin-top:1.5rem">Save Settings</button>
+    </section>
+  </main>
+
+  <!-- Modal Overlay -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal" id="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">Add Item</h3>
+        <button class="modal-close" id="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
+        <button class="btn btn-primary" id="modal-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast container -->
+  <div id="toast-container"></div>
+
+  <script src="js/storage.js?v=10"></script>
+  <script src="js/engine.js?v=10"></script>
+  <script src="js/charts.js?v=10"></script>
+  <script src="js/csv-importer.js?v=10"></script>
+  <script src="js/app.js?v=10"></script>
+</body>
+</html>
