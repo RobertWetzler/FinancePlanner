@@ -22,7 +22,7 @@ const App = {
     this.bindSnapshotButton();
     this.bindLifeEvents();
     this.navigateTo('dashboard');
-    this.toast('Welcome to ProjectionFinances!', 'info');
+    this.toast('Welcome to Ember! 🔥', 'info');
   },
 
   save() {

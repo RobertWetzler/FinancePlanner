@@ -3,7 +3,8 @@
    ============================================= */
 
 const Storage = {
-  KEY: 'projectionfinances_data',
+  KEY: 'ember_finances_data',
+  OLD_KEY: 'projectionfinances_data',
 
   getDefaultData() {
     return {
@@ -36,7 +37,15 @@ const Storage = {
 
   load() {
     try {
-      const raw = localStorage.getItem(this.KEY);
+      let raw = localStorage.getItem(this.KEY);
+      // Migrate from old key if new key is empty
+      if (!raw && this.OLD_KEY) {
+        raw = localStorage.getItem(this.OLD_KEY);
+        if (raw) {
+          localStorage.setItem(this.KEY, raw);
+          localStorage.removeItem(this.OLD_KEY);
+        }
+      }
       if (raw) {
         const data = JSON.parse(raw);
         // Merge with defaults for forward compat
@@ -73,7 +82,7 @@ const Storage = {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `projectionfinances_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `ember_finances_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
   },

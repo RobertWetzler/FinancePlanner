@@ -1,4 +1,4 @@
-# ProjectionFinances
+# Ember Finances 🔥
 
 A privacy-first financial planning tool inspired by [ProjectionLab](https://projectionlab.com/). Simulate your financial future, calculate when you can FIRE, and model life events - all running locally in your browser with no server or account linking required.
 
@@ -19,7 +19,7 @@ A privacy-first financial planning tool inspired by [ProjectionLab](https://proj
 ## Quick Start
 
 ```bash
-cd ProjectionFinances
+cd EmberFinances
 python3 -m http.server 8080
 ```
 

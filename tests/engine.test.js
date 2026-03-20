@@ -1,5 +1,5 @@
 /* =============================================================
-   ProjectionFinances — Engine Test Suite
+   Ember Finances — Engine Test Suite
    Comprehensive tests for financial calculations accuracy
    
    Run: node tests/engine.test.js
