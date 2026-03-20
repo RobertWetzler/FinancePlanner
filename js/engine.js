@@ -156,6 +156,72 @@ const Engine = {
     return grossIncome * (1 - taxRate);
   },
 
+  // ── Life Events: House Purchase Helpers ────────────
+  getHouseEvents(data) {
+    return (data.lifeEvents || []).filter(e => e.type === 'house' && e.enabled !== false);
+  },
+
+  getAllHouseEvents(data) {
+    return (data.lifeEvents || []).filter(e => e.type === 'house');
+  },
+
+  // Calculate annual house costs for a given year
+  getHouseCostsAtYear(house, year, purchaseYear) {
+    const yearsOwned = year - purchaseYear;
+    if (yearsOwned < 0) return null; // not yet purchased
+
+    const homeValue = house.homePrice * Math.pow(1 + (house.appreciation || 3) / 100, yearsOwned);
+    const propertyTax = homeValue * (house.propertyTaxRate || 1.1) / 100;
+    const insurance = (house.annualInsurance || 1800) * Math.pow(1.03, yearsOwned);
+    const maintenance = homeValue * (house.maintenanceRate || 1) / 100;
+    const hoa = (house.monthlyHOA || 0) * 12 * Math.pow(1.03, yearsOwned);
+
+    // Mortgage: fixed payment, calculate remaining balance
+    const mortgageAmount = house.homePrice - (house.downPayment || 0);
+    const monthlyRate = (house.mortgageRate || 6.5) / 100 / 12;
+    const totalMonths = (house.mortgageTerm || 30) * 12;
+    const monthlyPayment = monthlyRate > 0
+      ? mortgageAmount * (monthlyRate * Math.pow(1 + monthlyRate, totalMonths)) / (Math.pow(1 + monthlyRate, totalMonths) - 1)
+      : mortgageAmount / totalMonths;
+    const annualMortgage = monthlyPayment * 12;
+
+    // Remaining mortgage balance after yearsOwned
+    const monthsElapsed = Math.min(yearsOwned * 12, totalMonths);
+    let remainingBalance = mortgageAmount;
+    if (monthlyRate > 0) {
+      remainingBalance = mortgageAmount * (Math.pow(1 + monthlyRate, totalMonths) - Math.pow(1 + monthlyRate, monthsElapsed))
+        / (Math.pow(1 + monthlyRate, totalMonths) - 1);
+    } else {
+      remainingBalance = Math.max(0, mortgageAmount - monthlyPayment * monthsElapsed);
+    }
+    if (monthsElapsed >= totalMonths) remainingBalance = 0;
+
+    // Mortgage interest vs principal (for the current year)
+    const interestThisYear = remainingBalance * (house.mortgageRate || 6.5) / 100;
+    const principalThisYear = Math.min(annualMortgage - interestThisYear, remainingBalance);
+
+    // Rent savings (what you'd pay if renting instead)
+    const rentSaved = (house.currentRent || 0) * 12 * Math.pow(1 + (house.rentGrowth || 3) / 100, yearsOwned);
+
+    return {
+      homeValue,
+      propertyTax,
+      insurance,
+      maintenance,
+      hoa,
+      annualMortgage: remainingBalance > 0 ? annualMortgage : 0,
+      interestThisYear: remainingBalance > 0 ? interestThisYear : 0,
+      principalThisYear: remainingBalance > 0 ? principalThisYear : 0,
+      remainingBalance: Math.max(0, remainingBalance),
+      rentSaved,
+      // Total annual cost of ownership (excluding principal which builds equity)
+      totalOwnershipCost: propertyTax + insurance + maintenance + hoa + (remainingBalance > 0 ? interestThisYear : 0),
+      // Net extra cost compared to renting
+      netCostVsRent: propertyTax + insurance + maintenance + hoa + (remainingBalance > 0 ? annualMortgage : 0) - rentSaved,
+      equity: homeValue - Math.max(0, remainingBalance),
+    };
+  },
+
   // ── Net Worth Projection (with bucket tracking) ───
   projectNetWorth(data, years, nominalReturn, inflationRate, useReal) {
     const s = data.settings;
@@ -179,13 +245,48 @@ const Engine = {
     let cumulativeInflation = 1;
     let investableAssets = totalAssets;
 
+    // ── Life Events: Pre-process house purchases ────
+    const houses = this.getHouseEvents(data);
+    const currentYear = new Date().getFullYear();
+    let totalMortgageBalance = 0;
+    let totalHomeEquity = 0;
+    let houseAnnualCosts = 0;    // non-equity costs (tax, insurance, maintenance, interest)
+    let houseMortgagePayments = 0; // total mortgage payments (principal + interest)
+    let houseRentSaved = 0;
+    const lifeEventAnnotations = []; // for chart annotations
+
     // Helper: get income/expenses active at a given age, with per-stream growth
+    // Supports fractional ages and gap periods (sabbaticals)
     const getIncomeAtAge = (age, yearsFromNow) => {
+      const projYear = currentYear + yearsFromNow;
       return data.income.reduce((sum, i) => {
         const start = i.startAge || 0;
         const end = i.endAge || 999;
         if (age < start || age > end) return sum;
+
         const grown = (i.annual || 0) * Math.pow(1 + (i.growth || 0) / 100, yearsFromNow);
+
+        // Check gap periods — calculate what fraction of this year is active
+        if (i.gaps && i.gaps.length > 0) {
+          let totalGapFraction = 0;
+          for (const gap of i.gaps) {
+            if (gap.start && gap.end) {
+              const [gsY, gsM] = gap.start.split('-').map(Number);
+              const [geY, geM] = gap.end.split('-').map(Number);
+              const gapStartFrac = gsY + (gsM - 1) / 12;
+              const gapEndFrac = geY + (geM - 1) / 12;
+              // How much of this projection year overlaps with the gap?
+              const overlapStart = Math.max(gapStartFrac, projYear);
+              const overlapEnd = Math.min(gapEndFrac, projYear + 1);
+              if (overlapStart < overlapEnd) {
+                totalGapFraction += (overlapEnd - overlapStart);
+              }
+            }
+          }
+          const activeFraction = Math.max(0, 1 - totalGapFraction);
+          return sum + grown * activeFraction;
+        }
+
         return sum + grown;
       }, 0);
     };
@@ -199,11 +300,52 @@ const Engine = {
 
     for (let y = 0; y <= years; y++) {
       const age = currentAge + y;
+      const projYear = currentYear + y;
       const grossIncome = getIncomeAtAge(age, y);
       const incomeTax = grossIncome * incomeTaxRate;
       const netIncome = grossIncome - incomeTax;
       const nominalExpenses = getExpensesAtAge(age, y);
-      const netSavings = netIncome - nominalExpenses;
+
+      // ── House events for this year ────
+      houseAnnualCosts = 0;
+      houseMortgagePayments = 0;
+      houseRentSaved = 0;
+      totalMortgageBalance = 0;
+      totalHomeEquity = 0;
+
+      for (const house of houses) {
+        const purchaseYear = house.purchaseYear || currentYear;
+        if (projYear < purchaseYear) continue;
+
+        // On purchase year: deduct down payment + closing costs
+        if (projYear === purchaseYear && y > 0) {
+          const downPayment = house.downPayment || 0;
+          const closingCosts = (house.closingCosts || house.homePrice * 0.03);
+          const totalUpfront = downPayment + closingCosts;
+          buckets[this.BUCKET_TAXABLE] = Math.max(0, (buckets[this.BUCKET_TAXABLE] || 0) - totalUpfront);
+          lifeEventAnnotations.push({ year: projYear, icon: '🏠', label: house.name || 'Home Purchase' });
+        }
+
+        const costs = this.getHouseCostsAtYear(house, projYear, purchaseYear);
+        if (costs) {
+          // Non-mortgage ownership costs (property tax, insurance, maintenance, HOA)
+          // We do NOT include interest here — it's already in the mortgage payment
+          houseAnnualCosts += costs.propertyTax + costs.insurance + costs.maintenance + costs.hoa;
+          houseMortgagePayments += costs.annualMortgage;
+          houseRentSaved += costs.rentSaved;
+          totalMortgageBalance += costs.remainingBalance;
+          totalHomeEquity += costs.equity;
+        }
+      }
+
+      // Net house impact on cash flow:
+      // Total cash out = mortgage payment + non-mortgage ownership costs
+      // Net impact = cash out - rent no longer paying
+      const houseCashOutflow = houseMortgagePayments + houseAnnualCosts;
+      const houseNetCashImpact = houseCashOutflow - houseRentSaved;
+
+      const totalExpensesWithHouse = nominalExpenses + houseNetCashImpact;
+      const netSavings = netIncome - totalExpensesWithHouse;
 
       // Investment returns — during accumulation (buy & hold), only dividends are taxed
       // Unrealized cap gains are deferred until sale (withdrawal in FIRE)
@@ -216,26 +358,32 @@ const Engine = {
 
       const divider = useReal ? cumulativeInflation : 1;
       projections.push({
-        year: new Date().getFullYear() + y,
+        year: projYear,
         age,
         grossIncome: grossIncome / divider,
         incomeTax: incomeTax / divider,
         income: netIncome / divider,
-        expenses: nominalExpenses / divider,
+        expenses: totalExpensesWithHouse / divider,
+        baseExpenses: nominalExpenses / divider,
+        houseCosts: houseNetCashImpact / divider,
         savings: netSavings / divider,
         investmentReturns: netReturns / divider,
         investmentTax: dividendTax / divider,
         totalTax: (incomeTax + dividendTax) / divider,
-        netWorth: netWorth / divider,
-        assets: investableAssets / divider,
-        liabilities: (totalLiabilities * Math.pow(0.97, y)) / divider,
-        // Bucket data
+        netWorth: (netWorth + totalHomeEquity) / divider,
+        assets: (investableAssets + totalHomeEquity) / divider,
+        liabilities: (totalLiabilities * Math.pow(0.97, y) + totalMortgageBalance) / divider,
+        // Bucket data (home equity goes into real assets)
         taxable: (buckets[this.BUCKET_TAXABLE] || 0) / divider,
         taxDeferred: (buckets[this.BUCKET_TAX_DEFERRED] || 0) / divider,
         taxFree: (buckets[this.BUCKET_TAX_FREE] || 0) / divider,
         restricted: (buckets[this.BUCKET_RESTRICTED] || 0) / divider,
-        realAssets: (buckets[this.BUCKET_REAL_ASSETS] || 0) / divider,
+        realAssets: ((buckets[this.BUCKET_REAL_ASSETS] || 0) + totalHomeEquity) / divider,
         accessible: accessible / divider,
+        // Life event data
+        homeEquity: totalHomeEquity / divider,
+        mortgageBalance: totalMortgageBalance / divider,
+        lifeEvents: lifeEventAnnotations.filter(a => a.year === projYear),
       });
 
       if (y < years) {
@@ -311,12 +459,38 @@ const Engine = {
   },
 
   // Helper: compute net savings at a given age for a dataset (after income tax)
+  // Supports gap periods for sabbaticals
   _getSavingsAtAge(data, age, yearsFromNow) {
+    const currentYear = new Date().getFullYear();
+    const projYear = currentYear + yearsFromNow;
     const grossIncome = data.income.reduce((sum, i) => {
       const start = i.startAge || 0;
       const end = i.endAge || 999;
       if (age < start || age > end) return sum;
-      return sum + (i.annual || 0) * Math.pow(1 + (i.growth || 0) / 100, yearsFromNow);
+
+      const grown = (i.annual || 0) * Math.pow(1 + (i.growth || 0) / 100, yearsFromNow);
+
+      // Check gap periods — calculate what fraction of this year is active
+      if (i.gaps && i.gaps.length > 0) {
+        let totalGapFraction = 0;
+        for (const gap of i.gaps) {
+          if (gap.start && gap.end) {
+            const [gsY, gsM] = gap.start.split('-').map(Number);
+            const [geY, geM] = gap.end.split('-').map(Number);
+            const gapStartFrac = gsY + (gsM - 1) / 12;
+            const gapEndFrac = geY + (geM - 1) / 12;
+            const overlapStart = Math.max(gapStartFrac, projYear);
+            const overlapEnd = Math.min(gapEndFrac, projYear + 1);
+            if (overlapStart < overlapEnd) {
+              totalGapFraction += (overlapEnd - overlapStart);
+            }
+          }
+        }
+        const activeFraction = Math.max(0, 1 - totalGapFraction);
+        return sum + grown * activeFraction;
+      }
+
+      return sum + grown;
     }, 0);
     const expenses = data.expenses.reduce((sum, e) => {
       return sum + (e.annual || 0) * Math.pow(1 + (e.growth || 0) / 100, yearsFromNow);

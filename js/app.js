@@ -20,6 +20,7 @@ const App = {
     this.bindSeedData();
     this.bindImportSync();
     this.bindSnapshotButton();
+    this.bindLifeEvents();
     this.navigateTo('dashboard');
     this.toast('Welcome to ProjectionFinances!', 'info');
   },
@@ -62,6 +63,7 @@ const App = {
       case 'fire': this.refreshFIRE(); break;
       case 'milestones': this.refreshMilestones(); break;
       case 'import-sync': this.refreshImportSync(); break;
+      case 'life-events': this.refreshLifeEvents(); break;
     }
   },
 
@@ -187,6 +189,18 @@ const App = {
   },
 
   openIncomeModal(existing = null) {
+    const currentYear = new Date().getFullYear();
+    const gaps = existing?.gaps || [];
+    const gapsHtml = gaps.map((g, i) => `
+      <div class="gap-row" data-gap-index="${i}">
+        <input type="month" class="gap-start" value="${g.start || ''}" title="Gap start">
+        <span>to</span>
+        <input type="month" class="gap-end" value="${g.end || ''}" title="Gap end">
+        <input type="text" class="gap-label" value="${g.label || ''}" placeholder="e.g. Sabbatical" style="flex:1">
+        <button type="button" class="btn btn-small btn-danger gap-remove" title="Remove">✕</button>
+      </div>
+    `).join('');
+
     const body = `
       <div class="form-group">
         <label>Name</label>
@@ -208,25 +222,81 @@ const App = {
         <input type="number" id="modal-inc-growth" value="${existing?.growth ?? 3}" min="0" max="20" step="0.5">
         <small>Expected annual raise or growth</small>
       </div>
-      <div class="form-group">
-        <label>Start Age (optional)</label>
-        <input type="number" id="modal-inc-start" value="${existing?.startAge || ''}" placeholder="Current age">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>Start Date</label>
+          <input type="month" id="modal-inc-start-date" value="${existing?.startDate || ''}" placeholder="">
+          <small>Leave blank = already active</small>
+        </div>
+        <div class="form-group">
+          <label>End Date</label>
+          <input type="month" id="modal-inc-end-date" value="${existing?.endDate || ''}" placeholder="">
+          <small>Leave blank = indefinite</small>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>Start Age (or use date above)</label>
+          <input type="number" id="modal-inc-start" value="${existing?.startAge || ''}" placeholder="—">
+        </div>
+        <div class="form-group">
+          <label>End Age (or use date above)</label>
+          <input type="number" id="modal-inc-end" value="${existing?.endAge || ''}" placeholder="—">
+        </div>
       </div>
       <div class="form-group">
-        <label>End Age (optional)</label>
-        <input type="number" id="modal-inc-end" value="${existing?.endAge || ''}" placeholder="Retirement age">
+        <label>📅 Income Gaps (sabbaticals, layoffs, career breaks)</label>
+        <div id="modal-inc-gaps" class="gaps-list">
+          ${gapsHtml}
+        </div>
+        <button type="button" class="btn btn-secondary btn-small" id="modal-inc-add-gap" style="margin-top:8px">+ Add Gap Period</button>
+        <small style="display:block;margin-top:4px">Income is $0 during gap periods. Growth resumes after.</small>
       </div>
     `;
 
     this.openModal(existing ? 'Edit Income' : 'Add Income', body, () => {
+      // Collect gaps from DOM
+      const gapRows = document.querySelectorAll('#modal-inc-gaps .gap-row');
+      const collectedGaps = [];
+      gapRows.forEach(row => {
+        const start = row.querySelector('.gap-start').value;
+        const end = row.querySelector('.gap-end').value;
+        const label = row.querySelector('.gap-label').value;
+        if (start && end) {
+          collectedGaps.push({ start, end, label: label || 'Gap' });
+        }
+      });
+
+      // Convert date fields to age if provided
+      const startDate = document.getElementById('modal-inc-start-date').value;
+      const endDate = document.getElementById('modal-inc-end-date').value;
+      let startAge = parseInt(document.getElementById('modal-inc-start').value) || null;
+      let endAge = parseInt(document.getElementById('modal-inc-end').value) || null;
+
+      // Date takes precedence over age — convert to fractional age
+      const userAge = this.data.settings.age;
+      if (startDate) {
+        const [sy, sm] = startDate.split('-').map(Number);
+        const yearsFromNow = (sy - currentYear) + (sm - 1) / 12;
+        startAge = Math.round((userAge + yearsFromNow) * 10) / 10;
+      }
+      if (endDate) {
+        const [ey, em] = endDate.split('-').map(Number);
+        const yearsFromNow = (ey - currentYear) + (em - 1) / 12;
+        endAge = Math.round((userAge + yearsFromNow) * 10) / 10;
+      }
+
       const item = {
         id: existing?.id || Storage.generateId(),
         name: document.getElementById('modal-inc-name').value || 'Unnamed Income',
         type: document.getElementById('modal-inc-type').value,
         annual: parseFloat(document.getElementById('modal-inc-annual').value) || 0,
         growth: parseFloat(document.getElementById('modal-inc-growth').value) || 3,
-        startAge: parseInt(document.getElementById('modal-inc-start').value) || null,
-        endAge: parseInt(document.getElementById('modal-inc-end').value) || null,
+        startAge,
+        endAge,
+        startDate: startDate || null,
+        endDate: endDate || null,
+        gaps: collectedGaps,
       };
 
       const idx = this.data.income.findIndex(i => i.id === item.id);
@@ -237,6 +307,30 @@ const App = {
       this.refreshIncomeExpenses();
       this.toast('Income saved!', 'success');
     });
+
+    // Bind "Add Gap" button after modal is open
+    setTimeout(() => {
+      document.getElementById('modal-inc-add-gap')?.addEventListener('click', () => {
+        const container = document.getElementById('modal-inc-gaps');
+        const idx = container.querySelectorAll('.gap-row').length;
+        const row = document.createElement('div');
+        row.className = 'gap-row';
+        row.dataset.gapIndex = idx;
+        row.innerHTML = `
+          <input type="month" class="gap-start" value="" title="Gap start">
+          <span>to</span>
+          <input type="month" class="gap-end" value="" title="Gap end">
+          <input type="text" class="gap-label" value="" placeholder="e.g. Sabbatical" style="flex:1">
+          <button type="button" class="btn btn-small btn-danger gap-remove" title="Remove">✕</button>
+        `;
+        container.appendChild(row);
+        row.querySelector('.gap-remove').addEventListener('click', () => row.remove());
+      });
+      // Bind existing remove buttons
+      document.querySelectorAll('#modal-inc-gaps .gap-remove').forEach(btn => {
+        btn.addEventListener('click', () => btn.closest('.gap-row').remove());
+      });
+    }, 50);
   },
 
   openExpenseModal(existing = null) {
@@ -489,7 +583,7 @@ const App = {
       <div class="account-item" data-id="${item.id}">
         <div class="account-info">
           <div class="account-name">${item.name}</div>
-          <div class="account-type">${item.type}${item.monthlyContribution ? ' · $' + item.monthlyContribution.toLocaleString() + '/mo contribution' : ''}${item.monthlyPayment ? ' · $' + item.monthlyPayment.toLocaleString() + '/mo payment' : ''}</div>
+          <div class="account-type">${item.type}${item.monthlyContribution ? ' · $' + item.monthlyContribution.toLocaleString() + '/mo contribution' : ''}${item.monthlyPayment ? ' · $' + item.monthlyPayment.toLocaleString() + '/mo payment' : ''}${item.importSource ? ' · <span class=\"import-badge\" title=\"Last synced: ' + (item.lastImportDate || '').split('T')[0] + '\">🔄 ' + item.importSource.replace(/\.csv$/i, '').substring(0, 25) + '</span>' : ''}</div>
         </div>
         <div>
           <div class="account-value ${isAsset ? 'positive' : 'negative'}">${Engine.formatCurrency(item.balance, cur)}</div>
@@ -552,7 +646,8 @@ const App = {
       <div class="account-item" data-id="${item.id}">
         <div class="account-info">
           <div class="account-name">${item.name}</div>
-          <div class="account-type">${item.type}${item.startAge ? ' · starts age ' + item.startAge : ''}${item.endAge ? ' · ends age ' + item.endAge : ''} · ${item.growth}% annual growth</div>
+          <div class="account-type">${item.type}${item.startDate ? ' · from ' + item.startDate : (item.startAge ? ' · starts age ' + item.startAge : '')}${item.endDate ? ' · until ' + item.endDate : (item.endAge ? ' · ends age ' + item.endAge : '')} · ${item.growth}% growth${item.gaps && item.gaps.length > 0 ? ' · <span class=\"gap-badge\">' + item.gaps.length + ' gap' + (item.gaps.length > 1 ? 's' : '') + '</span>' : ''}</div>
+          ${item.gaps && item.gaps.length > 0 ? '<div class=\"account-gaps\">' + item.gaps.map(g => '<span class=\"gap-tag\">⏸️ ' + (g.label || 'Gap') + ': ' + g.start + ' → ' + g.end + '</span>').join('') + '</div>' : ''}
         </div>
         <div>
           <div class="account-value ${isIncome ? 'positive' : 'negative'}">${isIncome ? '+' : '-'}${Engine.formatCurrency(item.annual, cur)}/yr</div>
@@ -613,8 +708,14 @@ const App = {
     const inf = parseFloat(document.getElementById('proj-inflation').value);
     const real = document.getElementById('proj-real').checked;
 
-    const projections = Engine.projectNetWorth(this.data, years, ret, inf, real);
-    Charts.renderProjection('chart-projection', projections, this.data.milestones);
+    // Build what-if panel
+    this._buildWhatIfPanel('whatif-sections', () => this.refreshProjections());
+
+    // Create scenario data with what-if overrides
+    const scenarioData = this._getScenarioData();
+
+    const projections = Engine.projectNetWorth(scenarioData, years, ret, inf, real);
+    Charts.renderProjection('chart-projection', projections, scenarioData.milestones);
 
     // Table
     const tbody = document.querySelector('#projection-table tbody');
@@ -637,9 +738,218 @@ const App = {
     `).join('');
   },
 
+  // ── What-If Scenario System ────────────────────────
+  _whatIfOverrides: {},
+
+  _buildWhatIfPanel(containerId, onChangeCallback) {
+    const container = document.getElementById(containerId || 'whatif-sections');
+    if (!container) return;
+
+    // Skip rebuild if the container already has content and data hasn't changed
+    // (prevents infinite loops when called from refreshFIRE)
+    const dataFingerprint = JSON.stringify(this._whatIfOverrides) + this.data.income.length + this.data.expenses.length + (this.data.lifeEvents || []).length;
+    if (container._lastFingerprint === dataFingerprint) return;
+    container._lastFingerprint = dataFingerprint;
+
+    const cur = this.data.settings.currency;
+    let html = '';
+
+    // Income streams
+    if (this.data.income.length > 0) {
+      html += '<div class="whatif-section"><h4>💼 Income Streams</h4><div class="whatif-items">';
+      this.data.income.forEach(inc => {
+        const id = inc.id;
+        const isOn = this._whatIfOverrides['inc_' + id] !== false;
+        html += `
+          <div class="whatif-item ${isOn ? '' : 'disabled'}">
+            <label class="toggle">
+              <input type="checkbox" data-whatif="inc_${id}" ${isOn ? 'checked' : ''}>
+              <span class="toggle-slider"></span>
+            </label>
+            <span class="whatif-item-icon">💼</span>
+            <div class="whatif-item-info">
+              <div class="whatif-item-name">${inc.name}</div>
+              <div class="whatif-item-detail">${Engine.formatCurrency(inc.annual, cur)}/yr${inc.endAge ? ' · ends age ' + inc.endAge : ''}${inc.endDate ? ' · until ' + inc.endDate : ''}</div>
+            </div>
+          </div>`;
+      });
+      html += '</div></div>';
+    }
+
+    // Sabbaticals / Gaps — pulled out as their own toggleable section
+    const allGaps = [];
+    this.data.income.forEach(inc => {
+      if (inc.gaps && inc.gaps.length > 0) {
+        inc.gaps.forEach((g, gi) => {
+          allGaps.push({ gap: g, incomeId: inc.id, gapIndex: gi, incomeName: inc.name });
+        });
+      }
+    });
+    if (allGaps.length > 0) {
+      html += '<div class="whatif-section"><h4>⏸️ Sabbaticals &amp; Career Breaks</h4><div class="whatif-items">';
+      allGaps.forEach(({ gap, incomeId, gapIndex, incomeName }) => {
+        const gapId = 'gap_' + incomeId + '_' + gapIndex;
+        const gapOn = this._whatIfOverrides[gapId] !== false;
+        // Calculate duration in months
+        const [gsY, gsM] = (gap.start || '').split('-').map(Number);
+        const [geY, geM] = (gap.end || '').split('-').map(Number);
+        const origMonths = (gsY && geY) ? (geY - gsY) * 12 + (geM - gsM) : 6;
+        const overriddenMonths = this._whatIfOverrides[gapId + '_months'] ?? origMonths;
+        // Compute display end date from start + overridden months
+        let displayEnd = gap.end;
+        if (gsY && gsM) {
+          const endDate = new Date(gsY, gsM - 1 + overriddenMonths, 1);
+          displayEnd = endDate.getFullYear() + '-' + String(endDate.getMonth() + 1).padStart(2, '0');
+        }
+        html += `
+          <div class="whatif-item-expanded ${gapOn ? '' : 'disabled'}">
+            <div class="whatif-item">
+              <label class="toggle">
+                <input type="checkbox" data-whatif="${gapId}" ${gapOn ? 'checked' : ''}>
+                <span class="toggle-slider"></span>
+              </label>
+              <span class="whatif-item-icon">⏸️</span>
+              <div class="whatif-item-info">
+                <div class="whatif-item-name">${gap.label || 'Sabbatical'}</div>
+                <div class="whatif-item-detail">${gap.start} → <span data-gap-end="${gapId}">${displayEnd}</span> · from ${incomeName}</div>
+              </div>
+            </div>
+            <div class="whatif-gap-slider ${gapOn ? '' : 'disabled'}">
+              <label>Duration: <strong data-gap-months="${gapId}">${overriddenMonths}</strong> months</label>
+              <input type="range" data-gap-duration="${gapId}" data-gap-start="${gap.start}" min="1" max="24" step="1" value="${overriddenMonths}">
+            </div>
+          </div>`;
+      });
+      html += '</div></div>';
+    }
+
+    // Life Events (houses)
+    const houses = Engine.getAllHouseEvents(this.data);
+    if (houses.length > 0) {
+      html += '<div class="whatif-section"><h4>🏠 Life Events</h4><div class="whatif-items">';
+      houses.forEach(h => {
+        const id = h.id;
+        const isOn = this._whatIfOverrides['le_' + id] !== false && h.enabled !== false;
+        html += `
+          <div class="whatif-item ${isOn ? '' : 'disabled'}">
+            <label class="toggle">
+              <input type="checkbox" data-whatif="le_${id}" ${isOn ? 'checked' : ''}>
+              <span class="toggle-slider"></span>
+            </label>
+            <span class="whatif-item-icon">🏠</span>
+            <div class="whatif-item-info">
+              <div class="whatif-item-name">${h.name || 'Home Purchase'}</div>
+              <div class="whatif-item-detail">${Engine.formatCurrency(h.homePrice, cur, true)} · Buy ${h.purchaseYear}</div>
+            </div>
+          </div>`;
+      });
+      html += '</div></div>';
+    }
+
+    // Expenses
+    if (this.data.expenses.length > 0) {
+      html += '<div class="whatif-section"><h4>💸 Expenses</h4><div class="whatif-items">';
+      this.data.expenses.forEach(exp => {
+        const id = exp.id;
+        const isOn = this._whatIfOverrides['exp_' + id] !== false;
+        html += `
+          <div class="whatif-item ${isOn ? '' : 'disabled'}">
+            <label class="toggle">
+              <input type="checkbox" data-whatif="exp_${id}" ${isOn ? 'checked' : ''}>
+              <span class="toggle-slider"></span>
+            </label>
+            <span class="whatif-item-icon">💸</span>
+            <div class="whatif-item-info">
+              <div class="whatif-item-name">${exp.name}</div>
+              <div class="whatif-item-detail">${Engine.formatCurrency(exp.annual, cur)}/yr</div>
+            </div>
+          </div>`;
+      });
+      html += '</div></div>';
+    }
+
+    container.innerHTML = html;
+
+    // Bind toggle events
+    const changeHandler = onChangeCallback || (() => this.refreshProjections());
+    container.querySelectorAll('input[data-whatif]').forEach(toggle => {
+      toggle.addEventListener('change', () => {
+        this._whatIfOverrides[toggle.dataset.whatif] = toggle.checked;
+        container._lastFingerprint = null; // force rebuild on next refresh
+        changeHandler();
+      });
+    });
+
+    // Bind gap duration sliders
+    container.querySelectorAll('input[data-gap-duration]').forEach(slider => {
+      slider.addEventListener('input', () => {
+        const gapId = slider.dataset.gapDuration;
+        const months = parseInt(slider.value);
+        this._whatIfOverrides[gapId + '_months'] = months;
+
+        const monthsEl = container.querySelector(`[data-gap-months="${gapId}"]`);
+        if (monthsEl) monthsEl.textContent = months;
+        const endEl = container.querySelector(`[data-gap-end="${gapId}"]`);
+        if (endEl && slider.dataset.gapStart) {
+          const [sy, sm] = slider.dataset.gapStart.split('-').map(Number);
+          const endDate = new Date(sy, sm - 1 + months, 1);
+          endEl.textContent = endDate.getFullYear() + '-' + String(endDate.getMonth() + 1).padStart(2, '0');
+        }
+      });
+      slider.addEventListener('change', () => {
+        container._lastFingerprint = null;
+        changeHandler();
+      });
+    });
+  },
+
+  _getScenarioData() {
+    // Deep clone data, then apply what-if overrides
+    const d = JSON.parse(JSON.stringify(this.data));
+
+    // Filter income streams
+    d.income = d.income.filter(inc => this._whatIfOverrides['inc_' + inc.id] !== false);
+
+    // Filter and adjust gaps within income streams
+    d.income.forEach(inc => {
+      if (inc.gaps && inc.gaps.length > 0) {
+        // First: apply duration overrides using ORIGINAL indices (before filtering)
+        inc.gaps.forEach((g, origIdx) => {
+          const gapId = 'gap_' + inc.id + '_' + origIdx;
+          const overrideMonths = this._whatIfOverrides[gapId + '_months'];
+          if (overrideMonths !== undefined && g.start) {
+            const [sy, sm] = g.start.split('-').map(Number);
+            const endDate = new Date(sy, sm - 1 + overrideMonths, 1);
+            g.end = endDate.getFullYear() + '-' + String(endDate.getMonth() + 1).padStart(2, '0');
+          }
+        });
+        // Then: filter out disabled gaps using ORIGINAL indices
+        inc.gaps = inc.gaps.filter((g, origIdx) => {
+          return this._whatIfOverrides['gap_' + inc.id + '_' + origIdx] !== false;
+        });
+      }
+    });
+
+    // Filter life events
+    d.lifeEvents = (d.lifeEvents || []).map(le => {
+      if (this._whatIfOverrides['le_' + le.id] === false) {
+        return { ...le, enabled: false };
+      }
+      return le;
+    });
+
+    // Filter expenses
+    d.expenses = d.expenses.filter(exp => this._whatIfOverrides['exp_' + exp.id] !== false);
+
+    return d;
+  },
+
   // ── FIRE Calculator ────────────────────────────────
   bindFIREControls() {
     document.getElementById('btn-calc-fire').addEventListener('click', () => this.refreshFIRE());
+
+    // Auto-recalculate when healthcare cost changes
+    document.getElementById('fire-healthcare').addEventListener('change', () => this.refreshFIRE());
 
     // FIRE type card click handlers
     document.querySelectorAll('.fire-type[data-fire-type]').forEach(card => {
@@ -680,21 +990,27 @@ const App = {
   },
 
   refreshFIRE() {
+    // Build what-if panel for FIRE page
+    this._buildWhatIfPanel('fire-whatif-sections', () => this.refreshFIRE());
+
+    const scenarioData = this._getScenarioData();
     const s = this.data.settings;
-    const fire = Engine.calculateFIRE(this.data);
+    const fire = Engine.calculateFIRE(scenarioData);
     const cur = s.currency;
     const compact = s.compact;
 
-    const annualExpRet = parseFloat(document.getElementById('fire-expenses').value) || fire.annualExpenses || 40000;
+    const annualExpBase = parseFloat(document.getElementById('fire-expenses').value) || fire.annualExpenses || 40000;
+    const healthcareCost = parseFloat(document.getElementById('fire-healthcare').value) || 0;
+    const annualExpRet = annualExpBase + healthcareCost;
     const swr = parseFloat(document.getElementById('fire-swr').value) || 4;
     const nomReturn = parseFloat(document.getElementById('fire-return').value) || 7;
     const inflation = parseFloat(document.getElementById('fire-inflation').value) || 3;
 
     // Tax-adjusted FIRE number: accounts for taxes on withdrawals
     const fireNumberPreTax = Engine.computeFIRENumber(annualExpRet, swr);
-    const fireNumber = Engine.computeTaxAdjustedFIRENumber(annualExpRet, swr, this.data, nomReturn, inflation);
-    const yearsToFire = Engine.yearsToFIRE(fire.investedAssets, fireNumber, nomReturn, inflation, this.data);
-    const yearsToAccessible = Engine.yearsToAccessibleFIRE(fireNumber, nomReturn, inflation, this.data);
+    const fireNumber = Engine.computeTaxAdjustedFIRENumber(annualExpRet, swr, scenarioData, nomReturn, inflation);
+    const yearsToFire = Engine.yearsToFIRE(fire.investedAssets, fireNumber, nomReturn, inflation, scenarioData);
+    const yearsToAccessible = Engine.yearsToAccessibleFIRE(fireNumber, nomReturn, inflation, scenarioData);
 
     document.getElementById('fire-number').textContent = Engine.formatCurrency(fireNumber, cur, compact);
     document.getElementById('fire-number').title =
@@ -736,10 +1052,10 @@ const App = {
 
     // Chart — with bucket projection
     const maxYears = Math.min(Math.max(yearsToFire === Infinity ? 30 : yearsToFire + 10, 20), 50);
-    const projection = Engine.fireProjection(fire.investedAssets, fireNumber, nomReturn, inflation, Math.round(maxYears), this.data);
+    const projection = Engine.fireProjection(fire.investedAssets, fireNumber, nomReturn, inflation, Math.round(maxYears), scenarioData);
 
     // Generate bucket projections aligned to FIRE chart years
-    const bucketProj = Engine.projectNetWorth(this.data, Math.round(maxYears), nomReturn, inflation, false);
+    const bucketProj = Engine.projectNetWorth(scenarioData, Math.round(maxYears), nomReturn, inflation, false);
     const bucketData = bucketProj.map(p => ({
       taxable: p.taxable || 0,
       taxFree: p.taxFree || 0,
@@ -752,7 +1068,7 @@ const App = {
     Charts.renderFIRE('chart-fire', projection, bucketData);
 
     // Early retirement accessibility warning
-    const buckets = Engine.getBucketBalances(this.data);
+    const buckets = Engine.getBucketBalances(scenarioData);
     const totalInvested = Object.values(buckets).reduce((s, v) => s + v, 0);
     const lockedPct = totalInvested > 0
       ? ((buckets[Engine.BUCKET_TAX_DEFERRED] + buckets[Engine.BUCKET_RESTRICTED]) / totalInvested * 100)
@@ -1138,12 +1454,45 @@ const App = {
     switch (importType) {
       case 'accounts': {
         const accounts = CSVImporter.processAsHoldings(rows, mapping, headers);
+        let addedCount = 0;
+        let updatedCount = 0;
+
         accounts.forEach(acc => {
-          acc.id = Storage.generateId();
-          this.data.accounts.assets.push(acc);
+          // Try to find existing account by name match (case-insensitive, trimmed)
+          const accNameNorm = (acc.name || '').toLowerCase().trim();
+          const existing = this.data.accounts.assets.find(a => {
+            const existNorm = (a.name || '').toLowerCase().trim();
+            // Exact match
+            if (existNorm === accNameNorm) return true;
+            // Match if one contains the other (handles slight naming variations)
+            if (accNameNorm.length > 5 && existNorm.length > 5) {
+              if (existNorm.includes(accNameNorm) || accNameNorm.includes(existNorm)) return true;
+            }
+            // Match by importSource tag if both from same CSV source
+            if (a.importSource && a.importSource === sourceName && existNorm === accNameNorm) return true;
+            return false;
+          });
+
+          if (existing) {
+            // Update balance, keep user's custom growth rate and contributions
+            existing.balance = acc.balance;
+            existing.importSource = sourceName;
+            existing.lastImportDate = new Date().toISOString();
+            updatedCount++;
+          } else {
+            acc.id = Storage.generateId();
+            acc.importSource = sourceName;
+            acc.lastImportDate = new Date().toISOString();
+            this.data.accounts.assets.push(acc);
+            addedCount++;
+          }
           importCount++;
         });
-        this.toast(`✅ Imported ${importCount} accounts as assets`, 'success');
+
+        const parts = [];
+        if (addedCount > 0) parts.push(`${addedCount} new`);
+        if (updatedCount > 0) parts.push(`${updatedCount} updated`);
+        this.toast(`✅ Imported accounts: ${parts.join(', ')} (${importCount} total)`, 'success');
         break;
       }
 
@@ -1279,6 +1628,355 @@ const App = {
         </div>
       `;
     }).join('');
+  },
+
+  // ── Life Events ────────────────────────────────────
+  bindLifeEvents() {
+    document.getElementById('btn-add-house').addEventListener('click', () => this.openHouseModal());
+  },
+
+  openHouseModal(existing = null) {
+    const currentYear = new Date().getFullYear();
+    const body = `
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" id="modal-house-name" value="${existing?.name || ''}" placeholder="e.g. Seattle Home, Vacation Property">
+      </div>
+      <div class="form-group">
+        <label>Home Price ($)</label>
+        <input type="number" id="modal-house-price" value="${existing?.homePrice || 750000}" min="50000" step="10000">
+      </div>
+      <div class="form-group">
+        <label>Purchase Year</label>
+        <input type="number" id="modal-house-year" value="${existing?.purchaseYear || currentYear + 2}" min="${currentYear}" max="${currentYear + 40}">
+      </div>
+      <div class="form-group">
+        <label>Down Payment ($)</label>
+        <input type="number" id="modal-house-down" value="${existing?.downPayment || 150000}" min="0" step="5000">
+        <small id="modal-house-down-pct"></small>
+      </div>
+      <div class="form-group">
+        <label>Closing Costs ($)</label>
+        <input type="number" id="modal-house-closing" value="${existing?.closingCosts || ''}" min="0" step="1000" placeholder="Auto: ~3% of home price">
+        <small>Typically 2-5% of purchase price</small>
+      </div>
+      <div class="form-group">
+        <label>Mortgage Interest Rate (%)</label>
+        <input type="number" id="modal-house-rate" value="${existing?.mortgageRate || 6.5}" min="0" max="15" step="0.125">
+      </div>
+      <div class="form-group">
+        <label>Mortgage Term (years)</label>
+        <select id="modal-house-term">
+          <option value="15" ${existing?.mortgageTerm === 15 ? 'selected' : ''}>15 years</option>
+          <option value="20" ${existing?.mortgageTerm === 20 ? 'selected' : ''}>20 years</option>
+          <option value="30" ${!existing || existing?.mortgageTerm === 30 ? 'selected' : ''}>30 years</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Home Appreciation Rate (%/yr)</label>
+        <input type="number" id="modal-house-appreciation" value="${existing?.appreciation || 3.5}" min="0" max="10" step="0.5">
+        <small>Historical avg: ~3-4%/yr nationally</small>
+      </div>
+      <div class="form-group">
+        <label>Property Tax Rate (%/yr of home value)</label>
+        <input type="number" id="modal-house-proptax" value="${existing?.propertyTaxRate || 1.1}" min="0" max="5" step="0.1">
+        <small>WA state avg: ~1.1%, TX: ~1.8%, CA: ~0.7%</small>
+      </div>
+      <div class="form-group">
+        <label>Annual Homeowners Insurance ($)</label>
+        <input type="number" id="modal-house-insurance" value="${existing?.annualInsurance || 1800}" min="0" step="100">
+      </div>
+      <div class="form-group">
+        <label>Annual Maintenance (% of home value)</label>
+        <input type="number" id="modal-house-maint" value="${existing?.maintenanceRate || 1}" min="0" max="5" step="0.25">
+        <small>Rule of thumb: 1-2% of home value/yr</small>
+      </div>
+      <div class="form-group">
+        <label>Monthly HOA ($)</label>
+        <input type="number" id="modal-house-hoa" value="${existing?.monthlyHOA || 0}" min="0" step="25">
+      </div>
+      <div class="form-group">
+        <label>Current Monthly Rent ($ — what you'd save by buying)</label>
+        <input type="number" id="modal-house-rent" value="${existing?.currentRent || 2500}" min="0" step="100">
+        <small>This offsets house costs since you'd stop paying rent</small>
+      </div>
+      <div class="form-group">
+        <label>Rent Growth Rate (%/yr)</label>
+        <input type="number" id="modal-house-rentgrowth" value="${existing?.rentGrowth || 3}" min="0" max="10" step="0.5">
+      </div>
+    `;
+
+    this.openModal(existing ? 'Edit Home Purchase' : 'Add Home Purchase', body, () => {
+      const price = parseFloat(document.getElementById('modal-house-price').value) || 750000;
+      const item = {
+        id: existing?.id || Storage.generateId(),
+        type: 'house',
+        name: document.getElementById('modal-house-name').value || 'Home Purchase',
+        homePrice: price,
+        purchaseYear: parseInt(document.getElementById('modal-house-year').value) || currentYear + 2,
+        downPayment: parseFloat(document.getElementById('modal-house-down').value) || 0,
+        closingCosts: parseFloat(document.getElementById('modal-house-closing').value) || price * 0.03,
+        mortgageRate: parseFloat(document.getElementById('modal-house-rate').value) || 6.5,
+        mortgageTerm: parseInt(document.getElementById('modal-house-term').value) || 30,
+        appreciation: parseFloat(document.getElementById('modal-house-appreciation').value) || 3.5,
+        propertyTaxRate: parseFloat(document.getElementById('modal-house-proptax').value) || 1.1,
+        annualInsurance: parseFloat(document.getElementById('modal-house-insurance').value) || 1800,
+        maintenanceRate: parseFloat(document.getElementById('modal-house-maint').value) || 1,
+        monthlyHOA: parseFloat(document.getElementById('modal-house-hoa').value) || 0,
+        currentRent: parseFloat(document.getElementById('modal-house-rent').value) || 0,
+        rentGrowth: parseFloat(document.getElementById('modal-house-rentgrowth').value) || 3,
+      };
+
+      if (!this.data.lifeEvents) this.data.lifeEvents = [];
+      const idx = this.data.lifeEvents.findIndex(e => e.id === item.id);
+      if (idx >= 0) this.data.lifeEvents[idx] = item;
+      else this.data.lifeEvents.push(item);
+
+      this.save();
+      this.refreshLifeEvents();
+      this.toast('🏠 Home purchase saved!', 'success');
+    });
+
+    // Live update down payment percentage
+    const priceEl = document.getElementById('modal-house-price');
+    const downEl = document.getElementById('modal-house-down');
+    const pctEl = document.getElementById('modal-house-down-pct');
+    const updatePct = () => {
+      const p = parseFloat(priceEl.value) || 1;
+      const d = parseFloat(downEl.value) || 0;
+      pctEl.textContent = `${((d / p) * 100).toFixed(1)}% down payment`;
+    };
+    priceEl.addEventListener('input', updatePct);
+    downEl.addEventListener('input', updatePct);
+    updatePct();
+  },
+
+  refreshLifeEvents() {
+    const container = document.getElementById('house-events-list');
+    const houses = (this.data.lifeEvents || []).filter(e => e.type === 'house');
+    const cur = this.data.settings.currency;
+    const compact = this.data.settings.compact;
+    const currentYear = new Date().getFullYear();
+
+    if (!houses.length) {
+      container.innerHTML = '<div class="empty-state" style="padding:24px"><p>No home purchases planned yet. Click the button above to model buying a house.</p></div>';
+    } else {
+      container.innerHTML = houses.map(h => {
+        const mortgageAmt = h.homePrice - (h.downPayment || 0);
+        const monthlyRate = (h.mortgageRate || 6.5) / 100 / 12;
+        const totalMonths = (h.mortgageTerm || 30) * 12;
+        const monthlyPayment = monthlyRate > 0
+          ? mortgageAmt * (monthlyRate * Math.pow(1 + monthlyRate, totalMonths)) / (Math.pow(1 + monthlyRate, totalMonths) - 1)
+          : mortgageAmt / totalMonths;
+        const downPct = h.homePrice > 0 ? ((h.downPayment / h.homePrice) * 100).toFixed(0) : 0;
+
+        const isEnabled = h.enabled !== false;
+        return `
+          <div class="le-card-expanded${isEnabled ? '' : ' le-disabled'}" data-house-id="${h.id}">
+            <div class="le-card-expanded-header">
+              <label class="toggle le-toggle" title="${isEnabled ? 'Disable' : 'Enable'} this scenario">
+                <input type="checkbox" data-toggle-id="${h.id}" ${isEnabled ? 'checked' : ''}>
+                <span class="toggle-slider"></span>
+              </label>
+              <span class="le-card-icon">🏠</span>
+              <h4>${h.name || 'Home Purchase'}${isEnabled ? '' : ' <span style="color:var(--text-muted);font-weight:normal;font-size:0.8rem">(disabled)</span>'}</h4>
+              <div class="le-card-summary">
+                <span class="le-tag">${Engine.formatCurrency(h.homePrice, cur, true)}</span>
+                <span class="le-tag">${Engine.formatCurrency(monthlyPayment, cur)}/mo</span>
+                <span class="le-tag">Buy ${h.purchaseYear}</span>
+              </div>
+              <div class="le-card-actions">
+                <button data-action="edit" data-id="${h.id}" title="Full editor">✏️</button>
+                <button class="delete" data-action="delete" data-id="${h.id}" title="Delete">🗑️</button>
+              </div>
+            </div>
+            <div class="le-sliders-grid">
+              <div class="le-slider-group">
+                <label>Home Price</label>
+                <input type="range" data-field="homePrice" data-id="${h.id}" min="100000" max="2000000" step="25000" value="${h.homePrice}">
+                <span class="le-slider-val" data-val-for="homePrice-${h.id}">${Engine.formatCurrency(h.homePrice, cur, true)}</span>
+              </div>
+              <div class="le-slider-group">
+                <label>Purchase Year</label>
+                <input type="range" data-field="purchaseYear" data-id="${h.id}" min="${currentYear}" max="${currentYear + 30}" step="1" value="${h.purchaseYear}">
+                <span class="le-slider-val" data-val-for="purchaseYear-${h.id}">${h.purchaseYear}</span>
+              </div>
+              <div class="le-slider-group">
+                <label>Down Payment (${downPct}%)</label>
+                <input type="range" data-field="downPayment" data-id="${h.id}" min="0" max="${Math.round(h.homePrice * 0.5)}" step="5000" value="${h.downPayment}">
+                <span class="le-slider-val" data-val-for="downPayment-${h.id}">${Engine.formatCurrency(h.downPayment, cur, true)}</span>
+              </div>
+              <div class="le-slider-group">
+                <label>Mortgage Rate</label>
+                <input type="range" data-field="mortgageRate" data-id="${h.id}" min="2" max="10" step="0.125" value="${h.mortgageRate}">
+                <span class="le-slider-val" data-val-for="mortgageRate-${h.id}">${h.mortgageRate}%</span>
+              </div>
+              <div class="le-slider-group">
+                <label>Appreciation</label>
+                <input type="range" data-field="appreciation" data-id="${h.id}" min="0" max="8" step="0.5" value="${h.appreciation}">
+                <span class="le-slider-val" data-val-for="appreciation-${h.id}">${h.appreciation}%/yr</span>
+              </div>
+              <div class="le-slider-group">
+                <label>Property Tax Rate</label>
+                <input type="range" data-field="propertyTaxRate" data-id="${h.id}" min="0" max="3" step="0.1" value="${h.propertyTaxRate}">
+                <span class="le-slider-val" data-val-for="propertyTaxRate-${h.id}">${h.propertyTaxRate}%</span>
+              </div>
+              <div class="le-slider-group">
+                <label>Monthly Rent (replaced)</label>
+                <input type="range" data-field="currentRent" data-id="${h.id}" min="0" max="8000" step="100" value="${h.currentRent}">
+                <span class="le-slider-val" data-val-for="currentRent-${h.id}">${Engine.formatCurrency(h.currentRent, cur)}/mo</span>
+              </div>
+              <div class="le-slider-group">
+                <label>Maintenance</label>
+                <input type="range" data-field="maintenanceRate" data-id="${h.id}" min="0" max="4" step="0.25" value="${h.maintenanceRate}">
+                <span class="le-slider-val" data-val-for="maintenanceRate-${h.id}">${h.maintenanceRate}%/yr</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Bind slider events for live updates
+      let debounceTimer = null;
+      container.querySelectorAll('input[type="range"]').forEach(slider => {
+        slider.addEventListener('input', () => {
+          const id = slider.dataset.id;
+          const field = slider.dataset.field;
+          const val = parseFloat(slider.value);
+          const item = this.data.lifeEvents.find(e => e.id === id);
+          if (!item) return;
+
+          item[field] = val;
+
+          // Update displayed value
+          const valEl = container.querySelector(`[data-val-for="${field}-${id}"]`);
+          if (valEl) {
+            if (field === 'homePrice' || field === 'downPayment') {
+              valEl.textContent = Engine.formatCurrency(val, cur, true);
+              // Update down payment label with percentage
+              if (field === 'homePrice' || field === 'downPayment') {
+                const parent = slider.closest('.le-card-expanded');
+                const dpSlider = parent.querySelector('[data-field="downPayment"]');
+                const dpLabel = dpSlider?.closest('.le-slider-group')?.querySelector('label');
+                if (dpLabel && item.homePrice > 0) {
+                  dpLabel.textContent = `Down Payment (${((item.downPayment / item.homePrice) * 100).toFixed(0)}%)`;
+                }
+                // Adjust down payment max when price changes
+                if (field === 'homePrice') dpSlider.max = Math.round(val * 0.5);
+              }
+            } else if (field === 'purchaseYear') {
+              valEl.textContent = val;
+            } else if (field === 'currentRent') {
+              valEl.textContent = Engine.formatCurrency(val, cur) + '/mo';
+            } else if (field === 'mortgageRate' || field === 'appreciation' || field === 'propertyTaxRate' || field === 'maintenanceRate') {
+              valEl.textContent = val + (field === 'mortgageRate' ? '%' : '%/yr');
+            }
+          }
+
+          // Debounced save + chart refresh
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            this.save();
+            this._refreshLifeEventsChartAndComparison();
+          }, 150);
+        });
+      });
+
+      // Toggle enable/disable
+      container.querySelectorAll('input[data-toggle-id]').forEach(toggle => {
+        toggle.addEventListener('change', () => {
+          const id = toggle.dataset.toggleId;
+          const item = this.data.lifeEvents.find(e => e.id === id);
+          if (item) {
+            item.enabled = toggle.checked;
+            this.save();
+            this.refreshLifeEvents();
+            this.toast(toggle.checked ? '🏠 Home purchase enabled' : '🏠 Home purchase disabled', 'info');
+          }
+        });
+      });
+
+      // Edit/Delete buttons
+      container.querySelectorAll('button[data-action]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.id;
+          const item = this.data.lifeEvents.find(e => e.id === id);
+          if (btn.dataset.action === 'edit' && item) {
+            this.openHouseModal(item);
+          } else if (btn.dataset.action === 'delete') {
+            if (confirm('Delete this life event?')) {
+              this.data.lifeEvents = this.data.lifeEvents.filter(e => e.id !== id);
+              this.save();
+              this.refreshLifeEvents();
+              this.toast('Life event removed.', 'info');
+            }
+          }
+        });
+      });
+    }
+
+    this._refreshLifeEventsChartAndComparison();
+  },
+
+  _refreshLifeEventsChartAndComparison() {
+    // FIRE impact comparison
+    this.renderLifeEventComparison();
+
+    // Life events projection chart
+    const s = this.data.settings;
+    const projections = Engine.projectNetWorth(this.data, 30, s.defaultReturn, s.defaultInflation, s.realValues);
+    Charts.renderProjection('chart-life-events', projections, this.data.milestones);
+  },
+
+  renderLifeEventComparison() {
+    const container = document.getElementById('le-compare-content');
+    const houses = (this.data.lifeEvents || []).filter(e => e.type === 'house');
+    if (!houses.length) {
+      container.innerHTML = '<p style="color:var(--text-muted)">Add a life event to see how it impacts your FIRE date.</p>';
+      return;
+    }
+
+    const s = this.data.settings;
+    const cur = s.currency;
+    const compact = s.compact;
+
+    // Calculate FIRE with current life events
+    const fireExpenses = parseFloat(document.getElementById('fire-expenses')?.value) || 100000;
+    const swr = 4;
+    const fireNumber = Engine.computeTaxAdjustedFIRENumber(fireExpenses, swr, this.data, s.defaultReturn, s.defaultInflation);
+    const proj = Engine.projectNetWorth(this.data, 60, s.defaultReturn, s.defaultInflation, false);
+    const fireYearWith = proj.findIndex(p => p.netWorth >= fireNumber);
+
+    // Calculate without life events
+    const dataWithout = JSON.parse(JSON.stringify(this.data));
+    dataWithout.lifeEvents = [];
+    const projWithout = Engine.projectNetWorth(dataWithout, 60, s.defaultReturn, s.defaultInflation, false);
+    const fireYearWithout = projWithout.findIndex(p => p.netWorth >= fireNumber);
+
+    const diff = fireYearWith >= 0 && fireYearWithout >= 0 ? fireYearWith - fireYearWithout : null;
+
+    container.innerHTML = `
+      <div class="le-compare-item neutral">
+        <h4>FIRE Target</h4>
+        <div class="value">${Engine.formatCurrency(fireNumber, cur, compact)}</div>
+        <div class="sub">Tax-adjusted, ${fireExpenses.toLocaleString()}/yr @ 4% SWR</div>
+      </div>
+      <div class="le-compare-item ${diff !== null && diff > 0 ? 'worse' : diff !== null && diff < 0 ? 'better' : 'neutral'}">
+        <h4>FIRE Impact</h4>
+        <div class="value">${diff !== null ? (diff > 0 ? '+' + diff : diff) + ' years' : 'N/A'}</div>
+        <div class="sub">${diff !== null && diff > 0 ? 'House delays FIRE — but builds equity' : diff !== null && diff < 0 ? 'Buying sooner than renting!' : diff === 0 ? 'No change to FIRE date' : ''}</div>
+      </div>
+      <div class="le-compare-item neutral">
+        <h4>FIRE w/ House</h4>
+        <div class="value">${fireYearWith >= 0 ? 'Year ' + fireYearWith + ' (Age ' + (s.age + fireYearWith) + ')' : '∞'}</div>
+        <div class="sub">With all life events</div>
+      </div>
+      <div class="le-compare-item neutral">
+        <h4>FIRE w/o House</h4>
+        <div class="value">${fireYearWithout >= 0 ? 'Year ' + fireYearWithout + ' (Age ' + (s.age + fireYearWithout) + ')' : '∞'}</div>
+        <div class="sub">Renting only</div>
+      </div>
+    `;
   },
 
   // ── Seed Demo Data ─────────────────────────────────

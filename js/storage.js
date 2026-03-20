@@ -29,6 +29,7 @@ const Storage = {
       income: [],
       expenses: [],
       milestones: [],
+      lifeEvents: [],
       history: []  // net worth snapshots over time
     };
   },
@@ -49,6 +50,7 @@ const Storage = {
           income: data.income || [],
           expenses: data.expenses || [],
           milestones: data.milestones || [],
+          lifeEvents: data.lifeEvents || [],
           history: data.history || []
         };
       }

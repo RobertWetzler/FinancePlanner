@@ -227,6 +227,31 @@ const Charts = {
       }
     });
 
+    // Life event annotations (house purchases, etc.)
+    projections.forEach((p, i) => {
+      if (p.lifeEvents && p.lifeEvents.length > 0) {
+        p.lifeEvents.forEach((le, j) => {
+          annotations['le_' + i + '_' + j] = {
+            type: 'line',
+            xMin: p.year,
+            xMax: p.year,
+            borderColor: 'rgba(99,102,241,0.6)',
+            borderWidth: 2,
+            borderDash: [4, 4],
+            label: {
+              display: true,
+              content: (le.icon || '📌') + ' ' + (le.label || 'Event'),
+              position: 'start',
+              backgroundColor: 'rgba(99,102,241,0.15)',
+              color: '#a5b4fc',
+              font: { size: 11 },
+              padding: 4
+            }
+          };
+        });
+      }
+    });
+
     // Find age 59.5 year for penalty-free annotation
     const penaltyFreeIdx = projections.findIndex(p => p.age >= 59.5);
     if (penaltyFreeIdx > 0 && hasBuckets) {
